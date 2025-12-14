@@ -236,8 +236,20 @@ app.patch('/payment-success',async(req,res)=>{
 
     }
   
-    res.send({ message: 'Payment not completed' });
+    res.send({ message: 'Payment not completed',scholarshipName:session.metadata.scholarshipName, });
 })
+// paymetn-failed
+app.get('/payment-failed', async (req, res) => {
+  const session = await stripe.checkout.sessions.retrieve(
+    req.query.session_id
+  );
+
+  res.send({
+    scholarshipName: session.metadata.scholarshipName,
+    errorMessage: session.last_payment_error?.message || 'Payment cancelled',
+  });
+});
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
