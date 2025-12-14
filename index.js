@@ -177,10 +177,7 @@ async function run() {
 
 // payment check
 
-app.patch('/payment-seccess',async(req,res)=>{
-  const sessionID=req.query.session_id
-  console.log(sessionID)
-})
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
