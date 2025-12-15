@@ -134,22 +134,64 @@ async function run() {
       res.send(result)
     })
 //  payment api
+
+app.post('/applications', async (req, res) => {
+  const application = {
+    ...req.body,
+    applicationStatus: 'pending',
+    paymentStatus: 'unpaid',
+    applicationDate: new Date(),
+  };
+
+  const result = await applicationsColl.insertOne(application);
+
+  res.send({ applicationId: result.insertedId });
+});
+
 app.post('/create-checkout-session', async (req, res) => {
   try {
-    const application = req.body;
+    const { applicationId } = req.body;
+
+    if (!applicationId || !ObjectId.isValid(applicationId)) {
+      return res.status(400).json({ error: 'Invalid application id' });
+    }
+
+    const application = await applicationsColl.findOne({
+      _id: new ObjectId(applicationId),
+    });
+
+    if (!application) {
+      return res.status(404).json({ error: 'Application not found' });
+    }
+
+    if (application.paymentStatus === 'paid') {
+      return res.status(400).json({ error: 'Already paid' });
+    }
+
+    // ✅ correct scholarship lookup
+    const scholarshipcoll = await scholarshipsColl.findOne({
+      _id: new ObjectId(application.scholarshipId),
+    });
+
+    const totalAmount =
+      Number(application.applicationFees || 0) +
+      Number(application.serviceCharge || 0);
+
+    if (!totalAmount || totalAmount <= 0) {
+      return res.status(400).json({ error: 'Invalid amount' });
+    }
 
     const session = await stripe.checkout.sessions.create({
-      customer_email: application.email, // ✅ only email supported
+      customer_email: application.userEmail,
       payment_method_types: ['card'],
       line_items: [
         {
           price_data: {
             currency: 'USD',
             product_data: {
-              name: application.scholarshipName,
-              images: [application.universityImage],
+              name: application.universityName,
             },
-            unit_amount: application.totalAmount * 100,
+            unit_amount: totalAmount * 100,
           },
           quantity: 1,
         },
@@ -158,44 +200,24 @@ app.post('/create-checkout-session', async (req, res) => {
       success_url: `${process.env.SITE_DOMAIN}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.SITE_DOMAIN}/payment-failed?session_id={CHECKOUT_SESSION_ID}`,
       metadata: {
-        scholarshipId: application._id,
-       scholarshipName: application.scholarshipName,
-        userName: application.displayName, // ✅ FIXED
-        userEmail: application.email,
+        applicationId: application._id.toString(),
+        scholarshipId: application.scholarshipId.toString(),
+        scholarshipName: scholarshipcoll?.scholarshipName || '',
+        userEmail: application.userEmail,
         universityName: application.universityName,
-        scholarshipCategory: application.scholarshipCategory,
-        subjectCategory:application.subjectCategory,
         degree: application.degree,
-        applicationFees: application.applicationFees,
-        serviceCharge: application.serviceCharge,
-        applicationStatus: 'pending',
+        subjectCategory: application.subjectCategory,
       },
     });
 
-    const applicationInfo = {
-      scholarshipId: session.metadata.scholarshipId,
-      userName: session.metadata.userName,
-      userEmail: session.customer_email, // ✅ FIXED
-      universityName: session.metadata.universityName,
-      scholarshipCategory: session.metadata.scholarshipCategory,
-      subjectCategory:session.metadata.subjectCategory,
-      degree: session.metadata.degree,
-      applicationFees: session.metadata.applicationFees,
-      serviceCharge: session.metadata.serviceCharge,
-      applicationStatus: session.metadata.applicationStatus,
-      paymentStatus: 'unpaid',
-      applicationDate: new Date(),
-    };
-
-    const result = await applicationsColl.insertOne(applicationInfo);
-
-    res.send({ url: session.url, applicationId: result.insertedId });
-
+    res.send({ url: session.url });
   } catch (error) {
-    console.error(error);
+    console.error('Stripe error:', error);
     res.status(500).json({ error: error.message });
   }
 });
+
+
 
 
 
