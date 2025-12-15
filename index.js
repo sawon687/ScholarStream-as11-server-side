@@ -136,6 +136,16 @@ async function run() {
 //  payment api
 
 app.post('/applications', async (req, res) => {
+  const { userEmail, scholarshipId } = req.body;
+
+
+             const alreadyexit=await applicationsColl.findOne({scholarshipId})
+
+             if(alreadyexit)
+             {
+                    return res.send({ applicationId: alreadyexit._id })
+             }
+
   const application = {
     ...req.body,
     applicationStatus: 'pending',
@@ -144,14 +154,27 @@ app.post('/applications', async (req, res) => {
   };
 
   const result = await applicationsColl.insertOne(application);
-
   res.send({ applicationId: result.insertedId });
 });
+// application status cahnged
+ 
+app.patch('/application/:id',async(req,res)=>{
+   const id=req.params.id;
+   const {applicationStatus}=req.body
+   const query={_id:new ObjectId(id)}
+   const update={
+     $set:{
+        applicationStatus:applicationStatus,
+     }
+   }
+   const result=await applicationsColl.updateOne(query,update)
+   res.send(result)
+})
 
 app.post('/create-checkout-session', async (req, res) => {
   try {
     const { applicationId } = req.body;
-
+          console.log('id',applicationId)
     if (!applicationId || !ObjectId.isValid(applicationId)) {
       return res.status(400).json({ error: 'Invalid application id' });
     }
