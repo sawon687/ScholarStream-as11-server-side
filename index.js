@@ -32,6 +32,7 @@ async function run() {
     const scholarshipsColl = db.collection('scholarshipsColl');
     const userColl = db.collection('userColl');
     const applicationsColl = db.collection('applicationsCollection')
+    const reviewscoll=db.collection('reviewscoll')
     // post scholarshipsColl
     app.post('/scholarships', async (req, res) => {
       const scholarshipInfo = req.body;
@@ -136,15 +137,15 @@ async function run() {
 //  payment api
 
 app.post('/applications', async (req, res) => {
-  const { userEmail, scholarshipId } = req.body;
+  const { scholarshipId } = req.body;
 
 
-             const alreadyexit=await applicationsColl.findOne({scholarshipId})
+            //  const alreadyexit=await applicationsColl.findOne({scholarshipId})
 
-             if(alreadyexit)
-             {
-                    return res.send({ applicationId: alreadyexit._id })
-             }
+            //  if(alreadyexit)
+            //  {
+            //         return res.send({ applicationId: alreadyexit._id })
+            //  }
 
   const application = {
     ...req.body,
@@ -182,10 +183,11 @@ app.post('/create-checkout-session', async (req, res) => {
     const application = await applicationsColl.findOne({
       _id: new ObjectId(applicationId),
     });
-
+    console.log('appli',application)
     if (!application) {
       return res.status(404).json({ error: 'Application not found' });
     }
+
 
     if (application.paymentStatus === 'paid') {
       return res.status(400).json({ error: 'Already paid' });
@@ -195,7 +197,7 @@ app.post('/create-checkout-session', async (req, res) => {
     const scholarshipcoll = await scholarshipsColl.findOne({
       _id: new ObjectId(application.scholarshipId),
     });
-
+   console.log('scholahip',scholarshipcoll)
     const totalAmount =
       Number(application.applicationFees || 0) +
       Number(application.serviceCharge || 0);
@@ -225,14 +227,14 @@ app.post('/create-checkout-session', async (req, res) => {
       metadata: {
         applicationId: application._id.toString(),
         scholarshipId: application.scholarshipId.toString(),
-        scholarshipName: scholarshipcoll?.scholarshipName || '',
+        scholarshipName: scholarshipcoll.scholarshipName || '',
         userEmail: application.userEmail,
         universityName: application.universityName,
         degree: application.degree,
         subjectCategory: application.subjectCategory,
       },
     });
-
+ console.log('sesston data',session)
     res.send({ url: session.url });
   } catch (error) {
     console.error('Stripe error:', error);
@@ -240,7 +242,14 @@ app.post('/create-checkout-session', async (req, res) => {
   }
 });
 
+// application review
+app.post('/reviews',async(req,res)=>{
+       const review=req.body
 
+       const result=await reviewscoll.insertOne(review);
+
+       res.send(result)
+})
 
 
 
@@ -253,7 +262,7 @@ app.patch('/payment-success',async(req,res)=>{
   console.log(sessionId)
   
 
-    if(session.payment_status=='paid')
+    if(session.payment_status==='paid')
     {  
 
       const  id=session.metadata.scholarshipId
@@ -267,6 +276,7 @@ app.patch('/payment-success',async(req,res)=>{
       }
          
       const result=await applicationsColl.updateOne(query,update)
+       console.log('result:',result)
          const ScholarshipDetails = {
       scholarshipId: session.metadata.scholarshipId,
       scholarshipName:session.metadata.scholarshipName,
