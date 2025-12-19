@@ -34,6 +34,9 @@ const verifyFBToken = async (req, res, next) => {
   const token = req.headers.authorization;
   if (!token) return res.status(401).send({ message: 'Unauthorized access' });
 
+
+  
+
   try {
     const idToken = token.split(' ')[1];
     const decoded = await admin.auth().verifyIdToken(idToken);
@@ -63,6 +66,36 @@ async function run() {
     const userColl = db.collection('userColl');
     const applicationsColl = db.collection('applicationsCollection');
     const reviewscoll = db.collection('reviewscoll');
+       
+
+  //  moderatot veryfai
+
+  const verifyModerator = async (req, res, next) => {
+  const email = req.decoded_email;
+  const user = await userColl.findOne({ email });
+
+  if (!user || (user.role !== 'moderator' && user.role !== 'admin')) {
+    return res.status(403).send({ message: 'Forbidden access' });
+  }
+
+  next();
+}
+
+
+  // Verufy admin  
+const verifyAdmin=async(req,res,next)=>{
+          const email=req.decoded_email;
+          const query={email} 
+          const user=await userColl.findOne(query)
+
+          if(!user || user?.role !== 'admin')
+          {
+             return res.status(403).send({message:'Forbidden access'})
+          }
+
+          next()
+  }
+
 
     // Routes
 
@@ -72,25 +105,52 @@ async function run() {
     });
 
     // Scholarships CRUD
-    app.post('/scholarships', async (req, res) => {
+    app.post('/scholarships',verifyFBToken ,verifyAdmin, async (req, res) => {
       const scholarshipInfo = req.body;
       scholarshipInfo.scholarshipPostDate = new Date();
       const result = await scholarshipsColl.insertOne(scholarshipInfo);
       res.send(result);
     });
 
-    app.get('/scholarships', async (req, res) => {
-      const result = await scholarshipsColl.find().sort({ scholarshipPostDate: -1 }).toArray();
-      res.send(result);
+    app.get('/scholarships', async(req, res) => {
+      const {limit,skip,search,subject,category}=req.query
+      console.log('limitf',limit);
+      console.log('skip',skip);
+
+      const query={}
+      if(search)
+      {
+         query.$or=[
+             { scholarshipName:{$regex:search ,$options:'i'}},
+             {universityName:{$regex:search ,$options:'i'}},
+             {degree:{$regex:search ,$options:'i'}},
+         ]
+      }
+// filter
+
+  if(subject)
+  {
+     query.subjectCategory=subject;
+  }
+
+  if(category)
+  {
+     query.scholarshipCategory=category;
+  }
+      const result = await scholarshipsColl.find(query).limit(Number(limit)).skip(Number(skip)).sort({ scholarshipPostDate: -1 }).toArray();
+      const count=await scholarshipsColl.countDocuments()
+
+      console.log('count',count)
+      res.send({scholarData:result,totalScholar:count});
     });
 
-    app.get('/scholarships/:id', async (req, res) => {
+    app.get('/scholarships/:id',verifyFBToken, async (req, res) => {
       const id = req.params.id;
       const result = await scholarshipsColl.findOne({ _id: new ObjectId(id) });
       res.send(result);
     });
 
-    app.patch('/scholarships/:id', async (req, res) => {
+    app.patch('/scholarships/:id' ,verifyFBToken,verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
         const updateInfo = req.body;
@@ -104,10 +164,10 @@ async function run() {
       }
     });
 
-    app.delete('/scholarships/:id', async (req, res) => {
+    app.delete('/scholarships/:id' ,verifyFBToken,verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const query={ _id: new ObjectId(id) }
-      const result = await scholarshipsColl.deleteOne(queryj);
+      const result = await scholarshipsColl.deleteOne(query);
       res.send(result);
     });
 
@@ -123,22 +183,32 @@ async function run() {
       const result = await userColl.insertOne(userInfo);
       res.send(result);
     });
-
-    app.get('/user', async (req, res) => {
+     
+    // user delete
+    app.delete('/user/:id',async(req,res)=>{
+       const   id=req.params.id
+       const query={_id: new ObjectId(id)}
+       const result=await userColl.deleteOne(query)
+       
+       res.send(result)
+       
+    })
+      //  all display user
+    app.get('/user', verifyFBToken,verifyAdmin,async(req, res) => {
       const role = req.query.role;
       const query = {};
       if (role) query.role = role;
       const result = await userColl.find(query).toArray();
       res.send(result);
     });
-
-    app.get('/user/:email/role', async (req, res) => {
+        //  user role get
+    app.get('/user/:email/role',verifyFBToken, async (req, res) => {
       const email = req.params.email;
       const user = await userColl.findOne({ email });
       res.send({ role: user?.role || 'user' });
     });
-
-    app.patch('/user/:id', async (req, res) => {
+      //  user update role
+    app.patch('/user/:id',verifyFBToken,verifyAdmin, async (req, res) => {
       const id = req.params.id;
       const updateinfo = req.body;
       const result = await userColl.updateOne(
@@ -160,7 +230,7 @@ async function run() {
       res.send({ applicationId: result.insertedId });
     });
 
-    app.get('/application', verifyFBToken, async (req, res) => {
+    app.get('/application', verifyFBToken, verifyModerator,  async(req, res) => {
       const email = req.query.email;
       const query = {};
       if (email) {
@@ -172,7 +242,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch('/application/:id', async (req, res) => {
+    app.patch('/application/:id',verifyFBToken, verifyModerator, async(req, res) => {
       const id = req.params.id;
       const updateData = req.body;
       const result = await applicationsColl.updateOne(
@@ -182,20 +252,20 @@ async function run() {
       res.send(result);
     });
 
-    app.delete('/application/:id', async (req, res) => {
+    app.delete('/application/:id', verifyFBToken, async (req, res) => {
       const id = req.params.id;
       const result = await applicationsColl.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
 
     // Reviews
-    app.post('/reviews', async (req, res) => {
+    app.post('/reviews', verifyFBToken, async (req, res) => {
       const review = { ...req.body, date: new Date() };
       const result = await reviewscoll.insertOne(review);
       res.send(result);
     });
 
-    app.get('/reviews', async (req, res) => {
+    app.get('/reviews', verifyFBToken, verifyModerator, async (req, res) => {
       const { email, id } = req.query;
       const query = {};
       if (id) query.scholarshipId = id;
@@ -204,7 +274,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch('/reviews/:id', async (req, res) => {
+    app.patch('/reviews/:id', verifyFBToken, verifyModerator, async (req, res) => {
       const id = req.params.id;
       const reviewInfo = req.body;
       const result = await reviewscoll.updateOne(
@@ -214,14 +284,14 @@ async function run() {
       res.send(result);
     });
 
-    app.delete('/reviews/:id', async (req, res) => {
+    app.delete('/reviews/:id', verifyFBToken, async (req, res) => {
       const id = req.params.id;
       const result = await reviewscoll.deleteOne({ _id: new ObjectId(id) });
       res.send(result);
     });
 
     // Stripe Payment
-    app.post('/create-checkout-session', async (req, res) => {
+    app.post('/create-checkout-session', verifyFBToken, async (req, res) => {
       try {
         const { applicationId } = req.body;
         if (!applicationId || !ObjectId.isValid(applicationId))
@@ -272,7 +342,7 @@ async function run() {
       }
     });
 
-    app.patch('/payment-success', async (req, res) => {
+    app.patch('/payment-success',verifyFBToken, async (req, res) => {
       const sessionId = req.query.session_id;
       const session = await stripe.checkout.sessions.retrieve(sessionId);
 
@@ -297,7 +367,7 @@ async function run() {
       res.send({ message: 'Payment not completed', scholarshipName: session.metadata.scholarshipName });
     });
       //  payment failed api
-    app.get('/payment-failed', async (req, res) => {
+    app.get('/payment-failed',verifyFBToken, async (req, res) => {
       const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
       res.send({
         scholarshipName: session.metadata.scholarshipName,
