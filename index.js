@@ -56,7 +56,7 @@ const client = new MongoClient(uri, {
 // Main Function
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db('scholarshipDB');
     const scholarshipsColl = db.collection('scholarshipsColl');
     const userColl = db.collection('userColl');
@@ -470,8 +470,8 @@ async function run() {
     });
 
     // Test ping
-    await client.db("admin").command({ ping: 1 });
-    console.log("MongoDB connected successfully!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("MongoDB connected successfully!");
   } finally {
     // Do not close the client in long-running server
   }
