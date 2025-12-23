@@ -60,7 +60,7 @@ const client = new MongoClient(uri, {
 // Main Function
 async function run() {
   try {
-    await client.connect();
+    // await client.connect();
     const db = client.db('scholarshipDB');
     const scholarshipsColl = db.collection('scholarshipsColl');
     const userColl = db.collection('userColl');
@@ -292,7 +292,7 @@ const verifyAdmin=async(req,res,next)=>{
     });
 
     // Stripe Payment
-    app.post('/create-checkout-session',  async (req, res) => {
+    app.post('/create-checkout-session',verifyFBToken,  async(req, res) => {
       try {
         const { applicationId } = req.body;
         if (!applicationId || !ObjectId.isValid(applicationId))
@@ -342,56 +342,76 @@ const verifyAdmin=async(req,res,next)=>{
         res.status(500).json({ error: error.message });
       }
     });
-app.patch('/payment-success', async (req, res) => {
+
+    
+app.patch("/payment-success",verifyFBToken, async(req, res) => {
   try {
-    const sessionId = req.query.session_id;
+    // Accept session_id from query or body
+    const sessionId = req.query.session_id || req.body.session_id;
+    if (!sessionId)
+      return res.status(400).send({ success: false, message: "Missing session_id" });
+
+    console.log("Received session_id:", sessionId);
+
+    // Retrieve Stripe session
     const session = await stripe.checkout.sessions.retrieve(sessionId);
 
-    if (session.payment_status !== 'paid') {
-      return res.send({ success: false, message: "Payment not completed" });
+    // Check if payment is completed
+    if (session.payment_status !== "paid") {
+      return res.status(400).send({ success: false, message: "Payment not completed" });
     }
 
-    const scholarshipId = session.metadata.scholarshipId;
-    const applicationId = session.metadata.applicationId;
+    // Extract metadata
+    const {
+      scholarshipId,
+      applicationId,
+      username,
+      scholarshipName,
+      universityName,
+      degree,
+      subjectCategory,
+    } = session.metadata;
+
     const userEmail = session.customer_email;
-    const username = session.metadata.username;
     const amountUSD = session.amount_total / 100;
 
     const scholarshipDetails = {
       scholarshipId,
-      scholarshipName: session.metadata.scholarshipName,
-      universityName: session.metadata.universityName,
-      degree: session.metadata.degree,
-      subject: session.metadata.subjectCategory,
+      scholarshipName,
+      universityName,
+      degree,
+      subject: subjectCategory,
       amount: amountUSD,
       amountPaid: session.payment_status,
     };
 
-    // update application
+    // Update application
     await applicationsColl.updateOne(
       { _id: new ObjectId(applicationId) },
-      { $set: { userEmail, username, paymentStatus: 'paid' } }
+      { $set: { userEmail, username, paymentStatus: "paid" } }
     );
 
-    // insert payment only if not already exists
-    const alreadypayment = await paymentsColl.findOne({ sessionId });
-    if (!alreadypayment) {
-      await paymentsColl.insertOne({
-        sessionId,
-        scholarshipId,
-        applicationId,
-        userEmail,
-        username,
-        amount: amountUSD,
-        currency: 'USD',
-        paymentDate: new Date(),
-      });
-    }
+    // Upsert payment
+    await paymentsColl.updateOne(
+      { sessionId }, // filter by sessionId
+      {
+        $set: { amount: amountUSD, currency: "USD" }, // always update amount/currency
+        $setOnInsert: {
+          scholarshipId,
+          applicationId,
+          userEmail,
+          username,
+          paymentDate: new Date(),
+          sessionId,
+        },
+      },
+      { upsert: true }
+    );
 
+    // Send success response
     res.send({ success: true, scholarshipDetails });
-
   } catch (error) {
-    console.log("Payment Error:", error);
+    console.error("Payment Error:", error);
     res.status(500).send({ success: false, error: error.message });
   }
 });
@@ -425,8 +445,8 @@ app.get('/payment-analysis/total', verifyFBToken, verifyAdmin, async (req, res) 
     });
 
     // Test ping
-    await client.db("admin").command({ ping: 1 });
-    console.log("MongoDB connected successfully!");
+    // await client.db("admin").command({ ping: 1 });
+    // console.log("MongoDB connected successfully!");
   } finally {
     // Do not close the client in long-running server
   }
