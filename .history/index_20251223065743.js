@@ -445,7 +445,7 @@ async function run() {
 });
 
 
-    // Payment Failed api
+    // Payment Failed
     app.get('/payment-failed', async (req, res) => {
       try {
         const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
@@ -458,7 +458,7 @@ async function run() {
       }
     });
 
-    // payment analysis total sum api 
+    // payment analysis total api
     app.get('/payment-analysis/total', verifyFBToken, verifyAdmin, async (req, res) => {
       const result = await paymentsColl.aggregate([
         {

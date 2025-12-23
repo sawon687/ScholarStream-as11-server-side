@@ -445,7 +445,7 @@ async function run() {
 });
 
 
-    // Payment Failed api
+    // Payment Failed 
     app.get('/payment-failed', async (req, res) => {
       try {
         const session = await stripe.checkout.sessions.retrieve(req.query.session_id);
