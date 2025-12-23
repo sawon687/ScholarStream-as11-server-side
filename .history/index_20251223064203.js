@@ -228,7 +228,7 @@ async function run() {
       }
     });
 
-    // applications
+    // Applications
     app.post('/applications', verifyFBToken, async (req, res) => {
       try {
         const application = {
@@ -285,7 +285,7 @@ async function run() {
       }
     });
 
-    // reviews 
+    // ===== Reviews =====
     app.post('/reviews', verifyFBToken, async (req, res) => {
       try {
         const review = { ...req.body, date: new Date() };
@@ -333,7 +333,7 @@ async function run() {
       }
     });
 
-    // stripe Payment 
+    // ===== Stripe Payment =====
     app.post('/create-checkout-session', async (req, res) => {
       try {
         const { applicationId } = req.body;
@@ -401,22 +401,20 @@ async function run() {
     }
 
     const applicationId = session.metadata.applicationId;
-    const scholarshipId = session.metadata.scholarshipId;
     const amountUSD = session.amount_total / 100;
 
-    // update application
     await applicationsColl.updateOne(
       { _id: new ObjectId(applicationId) },
       { $set: { paymentStatus: 'paid' } }
     );
 
-    // 🔒 duplicate safe insert
+
+      
     await paymentsColl.updateOne(
       { sessionId },
       {
         $setOnInsert: {
           applicationId,
-          scholarshipId,
           amount: amountUSD,
           paymentDate: new Date(),
         }
@@ -425,25 +423,22 @@ async function run() {
     );
 
     const scholarshipDetails = {
-      scholarshipId,
-      scholarshipName: session.metadata.scholarshipName,
-      universityName: session.metadata.universityName,
-      degree: session.metadata.degree,
-      subject: session.metadata.subjectCategory,
-      amount: amountUSD,
-      paymentStatus: session.payment_status,
-    };
+          scholarshipId,
+          scholarshipName: session.metadata.scholarshipName,
+          universityName: session.metadata.universityName,
+          degree: session.metadata.degree,
+          subject: session.metadata.subjectCategory,
+          amount: amountUSD,
+          amountPaid: session.payment_status,
+        };
+
 
     console.log('Payment details:', scholarshipDetails);
-
-    res.send({ success: true, scholarshipDetails });
-
+        res.send({ success: true, scholarshipDetails });
   } catch (err) {
-    console.error(err);
     res.status(500).send({ success: false });
   }
 });
-
 
     // Payment Failed
     app.get('/payment-failed', async (req, res) => {
