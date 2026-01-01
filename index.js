@@ -225,7 +225,7 @@ async function run() {
         res.status(500).send({ message: 'Update failed', error: err.message });
       }
     });
-
+// use api
     app.delete('/user/:id', verifyFBToken, verifyAdmin, async (req, res) => {
       try {
         const id = req.params.id;
