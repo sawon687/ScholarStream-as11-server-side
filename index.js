@@ -252,7 +252,7 @@ async function run() {
         res.status(500).send({ message: 'Insert failed', error: err.message });
       }
     });
-
+// all aplication
     app.get('/application', verifyFBToken, async (req, res) => {
       try {
         const email = req.query.email;
